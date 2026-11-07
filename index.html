@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="hi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>स्पीडोमीटर प्रो | HUD & ट्रिप टेलीमेट्री</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Orbitron for Speed HUD digits -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Orbitron', 'monospace'],
+          },
+          colors: {
+            brand: {
+              primary: '#2563EB',
+              'primary-dark': '#1D4EDB',
+              'primary-light': '#93C5FD',
+              secondary: '#3B82F6',
+              accent: '#8B5CF6',
+              highlight: '#EC4899',
+              action: '#F59E0B',
+              teal: '#14B8A6',
+              success: '#16A34A',
+              error: '#DC2626',
+              warning: '#F59E0B',
+              info: '#0EA5E9',
+              bg: '#F8FAFC',
+              surface: '#FFFFFF',
+              card: '#F1F5F9',
+              border: '#E2E8F0',
+              'text-muted': '#64748B',
+              'text-primary': '#0F172A',
+              // Dark Mode Custom Surfaces
+              'dark-bg': '#0B0F19',
+              'dark-surface': '#111827',
+              'dark-card': '#1E293B',
+              'dark-border': '#334155',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --primary: #2563EB;
+      --primary-dark: #1D4EDB;
+      --primary-light: #93C5FD;
+      --secondary: #3B82F6;
+      --accent: #8B5CF6;
+      --highlight: #EC4899;
+      --action: #F59E0B;
+      --teal: #14B8A6;
+      --success: #16A34A;
+      --error: #DC2626;
+      --warning: #F59E0B;
+      --info: #0EA5E9;
+      --background: #F8FAFC;
+      --surface: #FFFFFF;
+      --card: #F1F5F9;
+      --border: #E2E8F0;
+      --muted: #64748B;
+      --text: #0F172A;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* HUD Mirror Mode (Flips entire screen horizontally for Car Windshield reflection) */
+    .hud-mirrored {
+      transform: scaleX(-1);
+    }
+
+    /* Smooth transitions for dial needle and glow */
+    .gauge-needle {
+      transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+      transform-origin: 150px 150px;
+    }
+
+    .pulse-alert {
+      animation: alertPulse 0.9s infinite alternate;
+    }
+
+    @keyframes alertPulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6);
+        border-color: #DC2626;
+      }
+      100% {
+        box-shadow: 0 0 35px 8px rgba(220, 38, 38, 0.85);
+        border-color: #DC2626;
+      }
+    }
+
+    /* Custom range input */
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 22px;
+      width: 22px;
+      border-radius: 50%;
+      background: #2563EB;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+    }
+  </style>
+</head>
+<body class="bg-brand-bg dark:bg-brand-dark-bg text-brand-text-primary dark:text-slate-100 min-h-screen transition-colors duration-300 antialiased selection:bg-brand-primary selection:text-white">
+
+  <!-- Main Container -->
+  <div id="appContainer" class="max-w-2xl mx-auto flex flex-col min-h-screen px-3 py-3 sm:px-5 sm:py-5">
+
+    <!-- 1. TOP HEADER & STATUS BAR -->
+    <header class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3.5 shadow-sm mb-4">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        
+        <!-- App Title & GPS Satellite Indicator -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-primary to-brand-accent flex items-center justify-center text-white shadow-md shadow-brand-primary/20">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-base font-extrabold tracking-tight">SpeedoPro</h1>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary dark:bg-brand-primary/20 dark:text-brand-primary-light uppercase">Local</span>
+            </div>
+            <!-- GPS Quality Pill -->
+            <div class="flex items-center gap-1.5 text-xs text-brand-text-muted dark:text-slate-400">
+              <span id="gpsDot" class="inline-block w-2.5 h-2.5 rounded-full bg-brand-success animate-pulse"></span>
+              <span id="gpsStatusText" class="font-medium text-[11px]">GPS: एक्टिव (±3m)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Toggles: Units, HUD Mode, Theme & Logs -->
+        <div class="flex items-center gap-1.5">
+          <!-- Unit Switch (KM/H, MPH, KNOTS) -->
+          <button id="unitToggleBtn" class="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-brand-border dark:border-brand-dark-border bg-brand-card dark:bg-brand-dark-card hover:border-brand-primary transition">
+            <span id="currentUnitText" class="text-brand-primary dark:text-brand-primary-light">KM/H</span>
+          </button>
+
+          <!-- HUD Mirror Toggle -->
+          <button id="hudToggleBtn" title="HUD विंडशील्ड मिरर मोड" class="p-2 rounded-lg border border-brand-border dark:border-brand-dark-border bg-brand-card dark:bg-brand-dark-card hover:text-brand-accent hover:border-brand-accent transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+            </svg>
+          </button>
+
+          <!-- Wake Lock Button (Keep Screen ON) -->
+          <button id="wakeLockBtn" title="स्क्रीन ऑन रखें" class="p-2 rounded-lg border border-brand-border dark:border-brand-dark-border bg-brand-card dark:bg-brand-dark-card hover:text-brand-warning transition">
+            <svg id="wakeLockIcon" class="w-4 h-4 text-brand-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+          </button>
+
+          <!-- Dark/Light Theme Toggle -->
+          <button id="themeToggleBtn" title="थीम बदलें" class="p-2 rounded-lg border border-brand-border dark:border-brand-dark-border bg-brand-card dark:bg-brand-dark-card hover:text-brand-primary transition">
+            <svg id="sunIcon" class="w-4 h-4 hidden dark:block text-brand-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            <svg id="moonIcon" class="w-4 h-4 block dark:hidden text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+          </button>
+
+          <!-- Trip History & Config Modal -->
+          <button id="openSettingsBtn" title="सेटिंग्स और ट्रिप्स" class="p-2 rounded-lg border border-brand-border dark:border-brand-dark-border bg-brand-card dark:bg-brand-dark-card hover:text-brand-accent transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Vehicle Profile Chips -->
+      <div class="flex items-center gap-1.5 mt-3 pt-3 border-t border-brand-border/60 dark:border-brand-dark-border/60 overflow-x-auto text-xs no-scrollbar">
+        <span class="text-brand-text-muted dark:text-slate-400 font-semibold mr-1 flex items-center gap-1 text-[11px]">
+          वाहन:
+        </span>
+        <button data-max="40" class="vehicle-btn active px-3 py-1 rounded-full font-medium transition bg-brand-primary text-white shadow-sm">
+          साइकिल (40)
+        </button>
+        <button data-max="120" class="vehicle-btn px-3 py-1 rounded-full font-medium transition bg-brand-card dark:bg-brand-dark-card hover:bg-slate-200 dark:hover:bg-slate-700">
+          बाइक (120)
+        </button>
+        <button data-max="180" class="vehicle-btn px-3 py-1 rounded-full font-medium transition bg-brand-card dark:bg-brand-dark-card hover:bg-slate-200 dark:hover:bg-slate-700">
+          कार (180)
+        </button>
+        <button data-max="240" class="vehicle-btn px-3 py-1 rounded-full font-medium transition bg-brand-card dark:bg-brand-dark-card hover:bg-slate-200 dark:hover:bg-slate-700">
+          एक्सप्रेस (240)
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. CENTRAL SPEEDOMETER DIAL -->
+    <main class="flex-1 flex flex-col items-center justify-center">
+      <div id="dialCard" class="w-full bg-brand-surface dark:bg-brand-dark-surface rounded-3xl border border-brand-border dark:border-brand-dark-border p-4 sm:p-6 shadow-lg shadow-brand-primary/5 flex flex-col items-center relative overflow-hidden transition-all duration-300">
+        
+        <!-- Over-speed Alert Banner (Hidden by default) -->
+        <div id="speedLimitAlert" class="hidden absolute top-3 inset-x-4 py-1.5 px-3 bg-brand-error text-white text-xs font-bold rounded-xl text-center shadow-lg animate-bounce z-20 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+          </svg>
+          चेतावनी: गति सीमा (<span id="alertLimitNum">80</span>) पार हो गई है!
+        </div>
+
+        <!-- SVG Speedometer Dial -->
+        <div class="relative w-full max-w-[320px] aspect-square flex items-center justify-center mt-2">
+          
+          <svg class="w-full h-full drop-shadow" viewBox="0 0 300 300">
+            <!-- Background Arc Track -->
+            <circle cx="150" cy="150" r="115" fill="none" stroke="currentColor" 
+              class="text-brand-border dark:text-slate-800"
+              stroke-width="16" 
+              stroke-dasharray="542" 
+              stroke-dashoffset="135" 
+              stroke-linecap="round" 
+              transform="rotate(135 150 150)"/>
+
+            <!-- Active Speed Dynamic Arc Gradient -->
+            <defs>
+              <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#2563EB" />
+                <stop offset="65%" stop-color="#8B5CF6" />
+                <stop offset="100%" stop-color="#EC4899" />
+              </linearGradient>
+            </defs>
+
+            <!-- Dynamic Arc -->
+            <circle id="speedArc" cx="150" cy="150" r="115" fill="none" 
+              stroke="url(#gaugeGradient)" 
+              stroke-width="16" 
+              stroke-dasharray="542" 
+              stroke-dashoffset="542" 
+              stroke-linecap="round" 
+              transform="rotate(135 150 150)"
+              style="transition: stroke-dashoffset 0.3s ease-out;"/>
+
+            <!-- Center Dial Hub Circle -->
+            <circle cx="150" cy="150" r="20" class="fill-brand-surface dark:fill-brand-dark-surface stroke-brand-primary" stroke-width="4"/>
+            <circle cx="150" cy="150" r="8" class="fill-brand-accent"/>
+
+            <!-- Dynamic Gauge Needle -->
+            <g id="needleGroup" class="gauge-needle" style="transform: rotate(-135deg);">
+              <polygon points="146,150 154,150 151,45 149,45" fill="#DC2626" />
+              <circle cx="150" cy="45" r="3" fill="#DC2626" />
+            </g>
+
+            <!-- Min/Max Ticks Markings Labels -->
+            <text x="75" y="245" class="text-[11px] font-bold fill-brand-text-muted">0</text>
+            <text id="maxDialTickLabel" x="215" y="245" class="text-[11px] font-bold fill-brand-text-muted">180</text>
+          </svg>
+
+          <!-- Central Digital Readout Overlaid -->
+          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-12">
+            <div id="speedDisplay" class="font-mono text-6xl sm:text-7xl font-extrabold tracking-tight tabular-nums text-brand-text-primary dark:text-white drop-shadow-sm">
+              0
+            </div>
+            <div class="flex items-center gap-1 mt-1">
+              <span id="unitBadge" class="text-xs font-black tracking-widest px-2.5 py-0.5 rounded-full bg-brand-primary text-white shadow-sm uppercase">
+                KM/H
+              </span>
+            </div>
+            <!-- Speed Limit Tag -->
+            <div class="mt-2 text-[10px] font-semibold text-brand-text-muted dark:text-slate-400">
+              सीमा: <span id="limitBadgeText" class="text-brand-action font-bold">80</span> <span class="unitLabel">KM/H</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Simulation / Slider Toggle (Great for Testing indoors without driving) -->
+        <div class="w-full mt-4 pt-3 border-t border-brand-border dark:border-brand-dark-border flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-xs text-brand-text-muted dark:text-slate-400">
+            <span class="flex items-center gap-1 font-semibold">
+              <svg class="w-3.5 h-3.5 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+              </svg>
+              सिम्युलेटर (परीक्षण गति):
+            </span>
+            <span id="sliderValueText" class="font-mono font-bold text-brand-primary dark:text-brand-primary-light">0 km/h</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <input id="demoSpeedSlider" type="range" min="0" max="180" value="0" class="w-full h-2 bg-brand-card dark:bg-brand-dark-card rounded-lg appearance-none cursor-pointer accent-brand-primary">
+            <button id="simDriveBtn" class="shrink-0 px-2.5 py-1 text-xs font-semibold rounded-lg bg-brand-primary/10 text-brand-primary dark:bg-brand-primary/20 dark:text-brand-primary-light hover:bg-brand-primary hover:text-white transition">
+              ऑटो रन
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- 3. TELEMETRY CARDS GRID -->
+    <section class="grid grid-cols-3 gap-2.5 my-4">
+      
+      <!-- Card: Top Speed -->
+      <div class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3 flex flex-col justify-between shadow-sm">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted dark:text-slate-400">अधिकतम</span>
+        <div class="mt-1 flex items-baseline gap-1">
+          <span id="maxSpeedVal" class="font-mono text-xl sm:text-2xl font-extrabold text-brand-highlight">0.0</span>
+          <span class="text-[10px] font-semibold text-brand-text-muted unitLabel">KM/H</span>
+        </div>
+      </div>
+
+      <!-- Card: Average Speed -->
+      <div class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3 flex flex-col justify-between shadow-sm">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted dark:text-slate-400">औसत गति</span>
+        <div class="mt-1 flex items-baseline gap-1">
+          <span id="avgSpeedVal" class="font-mono text-xl sm:text-2xl font-extrabold text-brand-teal">0.0</span>
+          <span class="text-[10px] font-semibold text-brand-text-muted unitLabel">KM/H</span>
+        </div>
+      </div>
+
+      <!-- Card: Distance -->
+      <div class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3 flex flex-col justify-between shadow-sm">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted dark:text-slate-400">कुल दूरी</span>
+        <div class="mt-1 flex items-baseline gap-1">
+          <span id="tripDistVal" class="font-mono text-xl sm:text-2xl font-extrabold text-brand-accent">0.00</span>
+          <span class="text-[10px] font-semibold text-brand-text-muted">KM</span>
+        </div>
+      </div>
+
+      <!-- Card: Moving Time -->
+      <div class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3 flex flex-col justify-between shadow-sm">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted dark:text-slate-400">सफ़र समय</span>
+        <div class="mt-1 font-mono text-base sm:text-lg font-bold text-brand-action">
+          <span id="timerVal">00:00:00</span>
+        </div>
+      </div>
+
+      <!-- Card: Altitude -->
+      <div class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3 flex flex-col justify-between shadow-sm">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted dark:text-slate-400">ऊंचाई (Alt)</span>
+        <div class="mt-1 flex items-baseline gap-1">
+          <span id="altitudeVal" class="font-mono text-base sm:text-lg font-bold text-brand-info">--</span>
+          <span class="text-[10px] font-semibold text-brand-text-muted">M</span>
+        </div>
+      </div>
+
+      <!-- Card: Heading Compass -->
+      <div class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3 flex flex-col justify-between shadow-sm">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted dark:text-slate-400">दिशा / Compass</span>
+        <div class="mt-1 flex items-center gap-1.5">
+          <svg id="compassArrow" class="w-4 h-4 text-brand-error transform transition-transform" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+          </svg>
+          <span id="headingVal" class="font-mono text-sm sm:text-base font-bold text-brand-text-primary dark:text-slate-200">N 0°</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 4. BOTTOM ACTION & TRIP CONTROLS -->
+    <footer class="bg-brand-surface dark:bg-brand-dark-surface rounded-2xl border border-brand-border dark:border-brand-dark-border p-3 flex items-center justify-between gap-3 shadow-md">
+      <!-- Start / Stop Button -->
+      <button id="mainActionBtn" class="flex-1 py-3 px-4 rounded-xl font-bold text-sm text-white bg-brand-primary hover:bg-brand-primary-dark transition shadow-md shadow-brand-primary/20 flex items-center justify-center gap-2">
+        <svg id="btnPlayIcon" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+        </svg>
+        <span id="btnActionText">ट्रिप शुरू करें</span>
+      </button>
+
+      <!-- Reset Button -->
+      <button id="resetTripBtn" class="py-3 px-4 rounded-xl font-bold text-sm bg-brand-card dark:bg-brand-dark-card hover:bg-slate-200 dark:hover:bg-slate-700 text-brand-text-primary dark:text-slate-200 border border-brand-border dark:border-brand-dark-border transition flex items-center justify-center gap-1.5">
+        <svg class="w-4 h-4 text-brand-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span>रीसेट</span>
+      </button>
+
+      <!-- Save & Export Button -->
+      <button id="saveTripBtn" class="py-3 px-4 rounded-xl font-bold text-sm bg-brand-teal text-white hover:opacity-90 transition flex items-center justify-center gap-1.5 shadow-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+        </svg>
+        <span>सेव</span>
+      </button>
+    </footer>
+
+  </div>
+
+  <!-- 5. LOCAL SETTINGS & SAVED TRIPS MODAL (Pure Local / Offline) -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-brand-surface dark:bg-brand-dark-surface w-full max-w-md rounded-3xl border border-brand-border dark:border-brand-dark-border p-5 shadow-2xl max-h-[85vh] flex flex-col">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-brand-border dark:border-brand-dark-border">
+        <h2 class="text-base font-extrabold flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-brand-primary"></span>
+          लोकल सेटिंग्स व ट्रिप लॉग्स
+        </h2>
+        <button id="closeSettingsBtn" class="p-1 rounded-lg hover:bg-brand-card dark:hover:bg-brand-dark-card text-brand-text-muted">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="flex-1 overflow-y-auto py-4 space-y-4 text-xs">
+        
+        <!-- Speed Limit Threshold Configuration -->
+        <div class="bg-brand-card dark:bg-brand-dark-card p-3 rounded-xl border border-brand-border dark:border-brand-dark-border">
+          <label class="block font-bold mb-1 text-brand-text-primary dark:text-slate-200">
+            ओवर-स्पीड अलार्म लिमिट (<span class="unitLabel">KM/H</span>):
+          </label>
+          <div class="flex items-center gap-3">
+            <input id="configSpeedLimitInput" type="number" value="80" min="20" max="250" class="w-24 px-3 py-1.5 rounded-lg border border-brand-border dark:border-brand-dark-border bg-brand-surface dark:bg-brand-dark-surface font-mono font-bold text-sm">
+            <span class="text-brand-text-muted">ध्वनि और विज़ुअल अलर्ट चालू रहेगा।</span>
+          </div>
+        </div>
+
+        <!-- Audio Alert Sound Toggle -->
+        <div class="flex items-center justify-between p-3 rounded-xl bg-brand-card dark:bg-brand-dark-card border border-brand-border dark:border-brand-dark-border">
+          <div>
+            <div class="font-bold">ऑडियो बीप अलार्म (Web Audio)</div>
+            <div class="text-brand-text-muted text-[11px]">सीमा पार होने पर लोकल बीप टोन बजाएं</div>
+          </div>
+          <input id="soundToggleCheckbox" type="checkbox" checked class="w-4 h-4 accent-brand-primary">
+        </div>
+
+        <!-- Saved Trips List (LocalStorage) -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-bold uppercase tracking-wider text-brand-text-muted">सेव की गई ट्रिप्स (लोकल मेमोरी):</span>
+            <button id="exportAllJsonBtn" class="text-brand-primary font-bold text-[11px] hover:underline">
+              JSON एक्सपोर्ट करें
+            </button>
+          </div>
+          
+          <div id="tripsListContainer" class="space-y-2 max-h-48 overflow-y-auto">
+            <!-- Dynamic trip items will render here -->
+            <div class="text-center py-4 text-brand-text-muted">कोई ट्रिप सेव नहीं है।</div>
+          </div>
+        </div>
+
+        <!-- Storage Info Card -->
+        <div class="p-3 rounded-xl bg-brand-primary/5 dark:bg-brand-primary/10 border border-brand-primary/20 text-[11px] text-brand-text-muted dark:text-slate-300">
+          🔒 <strong>100% प्राइवेट व ऑफलाइन:</strong> कोई भी डेटा किसी सर्वर पर नहीं भेजा जाता है। आपका सारा डेटा केवल आपके डिवाइस में सुरक्षित है।
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-3 border-t border-brand-border dark:border-brand-dark-border flex justify-end">
+        <button id="saveConfigBtn" class="px-5 py-2 rounded-xl bg-brand-primary text-white font-bold text-xs hover:bg-brand-primary-dark">
+          सेव करें और बंद करें
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC (100% Client-Side Engine) -->
+  <script>
+    // --- STATE VARIABLES ---
+    let state = {
+      isTracking: false,
+      currentSpeed: 0,
+      maxSpeed: 0,
+      avgSpeed: 0,
+      totalDistance: 0, // meters
+      movingSeconds: 0,
+      altitude: null,
+      heading: 0,
+      unit: 'km/h', // 'km/h', 'mph', 'knots'
+      maxGaugeScale: 180,
+      speedLimit: 80,
+      audioEnabled: true,
+      lastCoords: null,
+      wakeLock: null,
+      timerInterval: null,
+      watchId: null,
+      isSimulating: false,
+      simInterval: null,
+      savedTrips: JSON.parse(localStorage.getItem('speedo_trips') || '[]')
+    };
+
+    // --- AUDIO SYNTHESIZER (No external audio file needed, pure Web Audio API) ---
+    let audioCtx = null;
+    function playBeep() {
+      if (!state.audioEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // 880 Hz high alert
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+      } catch (e) {
+        console.warn('Audio could not play:', e);
+      }
+    }
+
+    // --- DOM REFERENCES ---
+    const dialCard = document.getElementById('dialCard');
+    const speedDisplay = document.getElementById('speedDisplay');
+    const needleGroup = document.getElementById('needleGroup');
+    const speedArc = document.getElementById('speedArc');
+    const unitBadge = document.getElementById('unitBadge');
+    const unitToggleBtn = document.getElementById('unitToggleBtn');
+    const currentUnitText = document.getElementById('currentUnitText');
+    const hudToggleBtn = document.getElementById('hudToggleBtn');
+    const appContainer = document.getElementById('appContainer');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const wakeLockBtn = document.getElementById('wakeLockBtn');
+    const wakeLockIcon = document.getElementById('wakeLockIcon');
+    const maxSpeedVal = document.getElementById('maxSpeedVal');
+    const avgSpeedVal = document.getElementById('avgSpeedVal');
+    const tripDistVal = document.getElementById('tripDistVal');
+    const timerVal = document.getElementById('timerVal');
+    const altitudeVal = document.getElementById('altitudeVal');
+    const headingVal = document.getElementById('headingVal');
+    const compassArrow = document.getElementById('compassArrow');
+    const speedLimitAlert = document.getElementById('speedLimitAlert');
+    const alertLimitNum = document.getElementById('alertLimitNum');
+    const limitBadgeText = document.getElementById('limitBadgeText');
+    const maxDialTickLabel = document.getElementById('maxDialTickLabel');
+    const mainActionBtn = document.getElementById('mainActionBtn');
+    const btnActionText = document.getElementById('btnActionText');
+    const resetTripBtn = document.getElementById('resetTripBtn');
+    const saveTripBtn = document.getElementById('saveTripBtn');
+    const demoSpeedSlider = document.getElementById('demoSpeedSlider');
+    const sliderValueText = document.getElementById('sliderValueText');
+    const simDriveBtn = document.getElementById('simDriveBtn');
+    const gpsDot = document.getElementById('gpsDot');
+    const gpsStatusText = document.getElementById('gpsStatusText');
+
+    // Modals & Settings
+    const settingsModal = document.getElementById('settingsModal');
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const saveConfigBtn = document.getElementById('saveConfigBtn');
+    const configSpeedLimitInput = document.getElementById('configSpeedLimitInput');
+    const soundToggleCheckbox = document.getElementById('soundToggleCheckbox');
+    const tripsListContainer = document.getElementById('tripsListContainer');
+    const exportAllJsonBtn = document.getElementById('exportAllJsonBtn');
+
+    // --- UNIT CONVERSION HELPERS ---
+    function convertSpeed(kmh) {
+      if (state.unit === 'mph') return kmh * 0.621371;
+      if (state.unit === 'knots') return kmh * 0.539957;
+      return kmh;
+    }
+
+    function getUnitString() {
+      return state.unit.toUpperCase();
+    }
+
+    // --- HAVERSINE FORMULA (Calculates Distance offline locally) ---
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // Earth radius in meters
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c; // in meters
+    }
+
+    // --- DIAL & NEEDLE RENDERING ---
+    function updateDial(speedKmh) {
+      const converted = convertSpeed(speedKmh);
+      speedDisplay.innerText = Math.round(converted);
+
+      // Needle Rotation: From -135deg (at 0 speed) to +135deg (at Max speed) -> 270 deg span
+      const fraction = Math.min(Math.max(converted / state.maxGaugeScale, 0), 1);
+      const angle = -135 + (fraction * 270);
+      needleGroup.style.transform = `rotate(${angle}deg)`;
+
+      // Dasharray total length for arc = 542. 270 degree arc corresponds to ~406 stroke
+      const maxStroke = 406;
+      const offset = 542 - (fraction * maxStroke);
+      speedArc.style.strokeDashoffset = offset;
+
+      // Over-speed condition check
+      if (converted >= state.speedLimit) {
+        dialCard.classList.add('pulse-alert');
+        speedLimitAlert.classList.remove('hidden');
+        playBeep();
+      } else {
+        dialCard.classList.remove('pulse-alert');
+        speedLimitAlert.classList.add('hidden');
+      }
+    }
+
+    // --- TELEMETRY CALCULATIONS ---
+    function updateMetrics(speedKmh) {
+      state.currentSpeed = speedKmh;
+      const converted = convertSpeed(speedKmh);
+
+      // Top Speed
+      if (converted > state.maxSpeed) {
+        state.maxSpeed = converted;
+        maxSpeedVal.innerText = state.maxSpeed.toFixed(1);
+      }
+
+      // Average Speed
+      if (state.movingSeconds > 0) {
+        const totalDistanceKm = state.totalDistance / 1000;
+        const totalHours = state.movingSeconds / 3600;
+        const avgKmh = totalHours > 0 ? (totalDistanceKm / totalHours) : 0;
+        state.avgSpeed = convertSpeed(avgKmh);
+        avgSpeedVal.innerText = state.avgSpeed.toFixed(1);
+      }
+
+      // Distance
+      const distConverted = (state.unit === 'mph') 
+        ? (state.totalDistance / 1000 * 0.621371) 
+        : (state.totalDistance / 1000);
+      tripDistVal.innerText = distConverted.toFixed(2);
+    }
+
+    // --- TIMER ENGINE ---
+    function formatTime(seconds) {
+      const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+      const s = String(seconds % 60).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
+
+    function startTimer() {
+      if (state.timerInterval) clearInterval(state.timerInterval);
+      state.timerInterval = setInterval(() => {
+        state.movingSeconds++;
+        timerVal.innerText = formatTime(state.movingSeconds);
+        // Refresh average
+        updateMetrics(state.currentSpeed);
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (state.timerInterval) clearInterval(state.timerInterval);
+      state.timerInterval = null;
+    }
+
+    // --- GPS POSITION RECEIVER (Pure Client Geolocation) ---
+    function onPositionSuccess(position) {
+      const coords = position.coords;
+
+      // Jitter filter: speed in m/s converted to km/h
+      let kmh = (coords.speed !== null && coords.speed > 0.4) ? (coords.speed * 3.6) : 0;
+      
+      // Update UI
+      updateDial(kmh);
+      updateMetrics(kmh);
+
+      // Distance calculation
+      if (state.lastCoords) {
+        const d = calculateDistance(
+          state.lastCoords.latitude, state.lastCoords.longitude,
+          coords.latitude, coords.longitude
+        );
+        // Add only if realistic (< 150m between updates to reject GPS teleport spikes)
+        if (d > 1.5 && d < 150) {
+          state.totalDistance += d;
+        }
+      }
+      state.lastCoords = coords;
+
+      // Altitude
+      if (coords.altitude !== null) {
+        altitudeVal.innerText = Math.round(coords.altitude);
+      }
+
+      // Compass Heading
+      if (coords.heading !== null && !isNaN(coords.heading)) {
+        state.heading = Math.round(coords.heading);
+        compassArrow.style.transform = `rotate(${state.heading}deg)`;
+        const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        const dirIndex = Math.round(state.heading / 45) % 8;
+        headingVal.innerText = `${directions[dirIndex]} ${state.heading}°`;
+      }
+
+      // Accuracy Indicator
+      const acc = Math.round(coords.accuracy || 3);
+      gpsStatusText.innerText = `GPS: एक्टिव (±${acc}m)`;
+      gpsDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-brand-success animate-pulse";
+    }
+
+    function onPositionError(err) {
+      console.warn("GPS Warning:", err.message);
+      gpsStatusText.innerText = `GPS: सिग्नल खोज रहे हैं...`;
+      gpsDot.className = "inline-block w-2.5 h-2.5 rounded-full bg-brand-warning";
+    }
+
+    // --- TRACKING CONTROLS ---
+    function toggleTrip() {
+      state.isTracking = !state.isTracking;
+
+      if (state.isTracking) {
+        btnActionText.innerText = "सफ़र रोकें";
+        mainActionBtn.className = "flex-1 py-3 px-4 rounded-xl font-bold text-sm text-white bg-brand-error hover:opacity-90 transition shadow-md shadow-brand-error/20 flex items-center justify-center gap-2";
+        startTimer();
+
+        // Start HTML5 Geolocation
+        if ("geolocation" in navigator) {
+          state.watchId = navigator.geolocation.watchPosition(onPositionSuccess, onPositionError, {
+            enableHighAccuracy: true,
+            maximumAge: 500,
+            timeout: 5000
+          });
+        }
+        requestWakeLock();
+      } else {
+        btnActionText.innerText = "ट्रिप शुरू करें";
+        mainActionBtn.className = "flex-1 py-3 px-4 rounded-xl font-bold text-sm text-white bg-brand-primary hover:bg-brand-primary-dark transition shadow-md shadow-brand-primary/20 flex items-center justify-center gap-2";
+        stopTimer();
+        if (state.watchId !== null) {
+          navigator.geolocation.clearWatch(state.watchId);
+          state.watchId = null;
+        }
+      }
+    }
+
+    function resetTrip() {
+      if (state.isTracking) toggleTrip();
+      state.currentSpeed = 0;
+      state.maxSpeed = 0;
+      state.avgSpeed = 0;
+      state.totalDistance = 0;
+      state.movingSeconds = 0;
+      state.lastCoords = null;
+
+      maxSpeedVal.innerText = "0.0";
+      avgSpeedVal.innerText = "0.0";
+      tripDistVal.innerText = "0.00";
+      timerVal.innerText = "00:00:00";
+      demoSpeedSlider.value = 0;
+      sliderValueText.innerText = "0 km/h";
+      updateDial(0);
+    }
+
+    // --- SCREEN WAKE LOCK API (Prevents screen from turning off) ---
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          state.wakeLock = await navigator.wakeLock.request('screen');
+          wakeLockIcon.classList.add('text-brand-warning');
+        } catch (e) {
+          console.log("WakeLock disabled/not allowed");
+        }
+      }
+    }
+
+    // --- TRIP LOGBOOK (Local Storage, Zero Server) ---
+    function saveTripLocal() {
+      if (state.totalDistance === 0 && state.maxSpeed === 0) {
+        alert("सेव करने के लिए कम से कम कुछ दूरी या गति रिकॉर्ड करें।");
+        return;
+      }
+
+      const trip = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString('hi-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        distance: (state.totalDistance / 1000).toFixed(2),
+        maxSpeed: state.maxSpeed.toFixed(1),
+        avgSpeed: state.avgSpeed.toFixed(1),
+        duration: formatTime(state.movingSeconds),
+        unit: getUnitString()
+      };
+
+      state.savedTrips.unshift(trip);
+      localStorage.setItem('speedo_trips', JSON.stringify(state.savedTrips));
+      renderTripsList();
+      alert("✅ ट्रिप सफलतापूर्वक आपके डिवाइस पर सुरक्षित कर दी गई!");
+    }
+
+    function renderTripsList() {
+      if (state.savedTrips.length === 0) {
+        tripsListContainer.innerHTML = '<div class="text-center py-4 text-brand-text-muted">कोई ट्रिप सेव नहीं है।</div>';
+        return;
+      }
+
+      tripsListContainer.innerHTML = state.savedTrips.map(t => `
+        <div class="bg-brand-surface dark:bg-brand-dark-surface p-2.5 rounded-xl border border-brand-border dark:border-brand-dark-border flex items-center justify-between">
+          <div>
+            <div class="font-bold text-brand-text-primary dark:text-slate-200">${t.date}</div>
+            <div class="text-brand-text-muted text-[10px]">दूरी: ${t.distance} km • टॉप: ${t.maxSpeed} ${t.unit} • समय: ${t.duration}</div>
+          </div>
+          <button onclick="deleteTrip(${t.id})" class="text-brand-error hover:bg-brand-error/10 p-1.5 rounded-lg">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    window.deleteTrip = function(id) {
+      state.savedTrips = state.savedTrips.filter(t => t.id !== id);
+      localStorage.setItem('speedo_trips', JSON.stringify(state.savedTrips));
+      renderTripsList();
+    };
+
+    // Export JSON to Device
+    function exportTripsJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.savedTrips, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `speedo_trips_${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    // --- VEHICLE PROFILE SWITCHING ---
+    document.querySelectorAll('.vehicle-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.vehicle-btn').forEach(b => {
+          b.classList.remove('active', 'bg-brand-primary', 'text-white', 'shadow-sm');
+          b.classList.add('bg-brand-card', 'dark:bg-brand-dark-card');
+        });
+        btn.classList.add('active', 'bg-brand-primary', 'text-white', 'shadow-sm');
+        btn.classList.remove('bg-brand-card', 'dark:bg-brand-dark-card');
+
+        const max = parseInt(btn.dataset.max);
+        state.maxGaugeScale = max;
+        maxDialTickLabel.innerText = max;
+        demoSpeedSlider.max = max;
+        updateDial(state.currentSpeed);
+      });
+    });
+
+    // --- UNIT TOGGLE (KM/H <-> MPH <-> KNOTS) ---
+    unitToggleBtn.addEventListener('click', () => {
+      if (state.unit === 'km/h') state.unit = 'mph';
+      else if (state.unit === 'mph') state.unit = 'knots';
+      else state.unit = 'km/h';
+
+      const u = getUnitString();
+      currentUnitText.innerText = u;
+      unitBadge.innerText = u;
+      document.querySelectorAll('.unitLabel').forEach(el => el.innerText = u);
+      updateDial(state.currentSpeed);
+      updateMetrics(state.currentSpeed);
+    });
+
+    // --- HUD MIRROR MODE FLIP ---
+    hudToggleBtn.addEventListener('click', () => {
+      appContainer.classList.toggle('hud-mirrored');
+      hudToggleBtn.classList.toggle('text-brand-accent');
+    });
+
+    // --- DAY / NIGHT THEME SWITCH ---
+    themeToggleBtn.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+    });
+
+    // --- SIMULATOR / TESTING SLIDER ---
+    demoSpeedSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      sliderValueText.innerText = `${val} km/h`;
+      updateDial(val);
+      if (state.isTracking) updateMetrics(val);
+    });
+
+    // Auto Simulation Drive
+    simDriveBtn.addEventListener('click', () => {
+      if (state.isSimulating) {
+        clearInterval(state.simInterval);
+        state.isSimulating = false;
+        simDriveBtn.innerText = "ऑटो रन";
+      } else {
+        state.isSimulating = true;
+        simDriveBtn.innerText = "स्टॉप";
+        let targetSpeed = 20;
+        let accel = 2;
+        state.simInterval = setInterval(() => {
+          targetSpeed += accel;
+          if (targetSpeed > state.maxGaugeScale - 10) accel = -3;
+          if (targetSpeed < 10) accel = 2.5;
+          demoSpeedSlider.value = Math.round(targetSpeed);
+          sliderValueText.innerText = `${Math.round(targetSpeed)} km/h`;
+          updateDial(targetSpeed);
+          if (state.isTracking) updateMetrics(targetSpeed);
+        }, 120);
+      }
+    });
+
+    // --- EVENT LISTENERS ---
+    mainActionBtn.addEventListener('click', toggleTrip);
+    resetTripBtn.addEventListener('click', resetTrip);
+    saveTripBtn.addEventListener('click', saveTripLocal);
+
+    // Modal Events
+    openSettingsBtn.addEventListener('click', () => {
+      renderTripsList();
+      configSpeedLimitInput.value = state.speedLimit;
+      soundToggleCheckbox.checked = state.audioEnabled;
+      settingsModal.classList.remove('hidden');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+
+    saveConfigBtn.addEventListener('click', () => {
+      state.speedLimit = parseInt(configSpeedLimitInput.value) || 80;
+      state.audioEnabled = soundToggleCheckbox.checked;
+      limitBadgeText.innerText = state.speedLimit;
+      alertLimitNum.innerText = state.speedLimit;
+      settingsModal.classList.add('hidden');
+    });
+
+    exportAllJsonBtn.addEventListener('click', exportTripsJSON);
+
+    // Initialize Dial
+    updateDial(0);
+    renderTripsList();
+  </script>
+</body>
+</html>
